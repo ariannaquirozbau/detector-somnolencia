@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.mycompany</groupId>
+    <artifactId>detectorsomnolencia</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Release 17: compatible con JDK 17 en adelante (incluido el 21, 24, 26). -->
+        <maven.compiler.release>17</maven.compiler.release>
+        <!-- IMPORTANTE: esta linea debe coincidir EXACTAMENTE con el paquete + nombre
+             de la clase que tiene el main. Si no coincide, el boton "Run Project" falla. -->
+        <exec.mainClass>com.mycompany.detectorsomnolencia.DetectorSomnolencia</exec.mainClass>
+    </properties>
+
+    <dependencies>
+        <!-- OpenCV empaquetado por Bytedeco (JavaCV).
+             Maven descarga automaticamente las librerias nativas para Windows/Mac/Linux.
+             No hace falta instalar OpenCV a mano ni configurar DLLs. -->
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>opencv-platform</artifactId>
+            <version>4.5.3-1.5.6</version>
+        </dependency>
+    </dependencies>
+</project>

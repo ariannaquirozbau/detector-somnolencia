@@ -1,0 +1,229 @@
+=============================================================================
+  MEJORAS AL IDENTIFICADOR DE RASGOS FACIALES
+  Sistema de Deteccion de Somnolencia al Volante - Equipo 3
+=============================================================================
+
+LO PRIMERO: QUE **NO** CAMBIO
+-----------------------------
+La logica de decision del sistema es EXACTAMENTE la misma que la documentada
+en el reporte tecnico entregado:
+
+  - Umbral de EAR: 0.23
+  - Umbral de MAR: 0.35
+  - Ventana deslizante: 1500 ms
+  - Umbral de PERCLOS: 80%
+  - Minimo de muestras: 5, cubriendo al menos el 60% del intervalo
+  - Bostezo: 700 ms continuos de boca abierta
+  - Cola circular para la ventana, lista enlazada para el historial
+
+Tampoco cambiaron ColaCircular.java, ListaEventos.java, Muestra.java,
+Evento.java, Alarma.java ni PruebaEstructuras.java.
+
+Lo que se mejoro es la etapa PREVIA a la decision: como se localiza el rostro,
+como se obtienen los 68 puntos y como se muestran en pantalla.
+
+
+ARCHIVOS QUE CAMBIAN
+--------------------
+  NUEVO       RasgosFaciales.java
+  MODIFICADO  DetectorSomnolencia.java
+
+Los demas quedan igual.
+
+
+=============================================================================
+  LAS CINCO MEJORAS, UNA POR UNA
+=============================================================================
+
+1. ESTABILIZACION TEMPORAL DE LOS PUNTOS  (la mas importante)
+-------------------------------------------------------------
+EL PROBLEMA: el modelo LBF estima la posicion de cada uno de los 68 puntos de
+forma independiente en cada cuadro de video. La imagen de una camara web
+siempre trae ruido (variacion de iluminacion, compresion, grano del sensor),
+asi que la posicion estimada de un mismo punto oscila algunos pixeles de un
+cuadro al siguiente aunque la persona este completamente inmovil.
+
+Eso produce dos efectos:
+  - Visual: los puntos "tiemblan" sobre el rostro.
+  - Numerico: el EAR se calcula con distancias entre esos puntos, asi que el
+    temblor se traslada a la metrica y le agrega ruido.
+
+LA SOLUCION: un filtro exponencial sobre cada coordenada.
+
+    posicion_suave = alfa * posicion_anterior + (1 - alfa) * posicion_nueva
+
+Con alfa = 0.55, cada punto conserva el 55% de su posicion previa y adopta el
+45% de la nueva. El resultado sigue el movimiento real del rostro pero ignora
+las oscilaciones de un solo cuadro.
+
+Es el mismo principio que el programa ya usaba para suavizar los fps; aqui se
+aplica a 68 pares de coordenadas. Costo: O(68) por cuadro, una multiplicacion
+y una suma por coordenada, sin reservar memoria nueva.
+
+SE PUEDE ENCENDER Y APAGAR EN VIVO CON LA TECLA T. Esto sirve para demostrar
+el efecto durante la presentacion: apagalo y los puntos tiemblan, prendelo y
+se estabilizan.
+
+Detalle fino: cuando se pierde el rostro, el filtro se reinicia. Si no, al
+reaparecer la persona los puntos se arrastrarian desde la posicion vieja y se
+veria un "salto".
+
+
+2. PREPROCESAMIENTO DE LA IMAGEN
+--------------------------------
+ANTES: se buscaba el rostro directamente sobre la imagen a color.
+
+AHORA: se convierte a escala de grises y se ecualiza el histograma.
+
+  - Escala de grises: el color no aporta nada a Haar Cascades, que trabaja con
+    patrones de intensidad (regiones claras contra regiones oscuras).
+  - Ecualizacion del histograma: redistribuye los niveles de gris para que
+    ocupen todo el rango disponible. Un rostro a contraluz o en penumbra, cuyos
+    tonos estaban todos apretados en una franja estrecha, gana contraste y se
+    vuelve detectable.
+
+El ajuste de los 68 puntos se sigue haciendo sobre la imagen original, igual
+que antes, para no alterar la precision del modelo.
+
+
+3. DETECCION DE ROSTRO CON PARAMETROS EXPLICITOS
+------------------------------------------------
+ANTES:  detectorRostros.detectMultiScale(frame, rostrosDetectados);
+
+Esa llamada usa los valores por defecto de OpenCV: busca rostros de CUALQUIER
+tamano, desde unos pocos pixeles hasta la imagen completa, y acepta una region
+con apenas 3 detecciones vecinas.
+
+AHORA se pasan tres parametros:
+
+  - Factor de escala 1.1: la ventana de busqueda crece 10% entre pasadas.
+  - Vecinos minimos 5 (antes 3): una region necesita mas detecciones que
+    coincidan para aceptarse como rostro. Menos falsos positivos.
+  - Tamano minimo = 20% del alto de la imagen: un conductor frente a la camara
+    ocupa buena parte del cuadro; descartar candidatos diminutos elimina ruido
+    y ademas ACELERA la busqueda, porque se recorren menos escalas.
+
+
+4. SELECCION DEL ROSTRO PRINCIPAL
+---------------------------------
+ANTES: se tomaba rostrosDetectados.get(0), que es un indice arbitrario: el
+orden en que Haar Cascades los encontro.
+
+AHORA: se elige el rostro de MAYOR AREA. El conductor es quien esta mas cerca
+de la camara, por lo tanto el mas grande en la imagen. Si alguien pasa por
+detras durante la demostracion, el sistema sigue midiendo a la persona
+correcta.
+
+
+5. TRES MODOS DE VISUALIZACION  (tecla V)
+------------------------------------------
+  MINIMO      Solo los 16 puntos que alimentan EAR y MAR. Es exactamente la
+              vista de la version anterior.
+
+  MALLA       El contorno completo del rostro: mandibula, cejas, nariz, ojos y
+              boca, unidos con lineas. Ojos y boca resaltados porque son los
+              que alimentan las metricas. ES LA VISTA POR DEFECTO.
+
+  68 PUNTOS   Cada region con su color, sin lineas, y ademas se dibujan las
+              TRES DISTANCIAS con las que se calcula el EAR de cada ojo (las
+              dos verticales y la horizontal). Sirve para explicar de donde
+              sale el numero que aparece en el panel.
+
+
+=============================================================================
+  DOS EXTRAS QUE VIENEN INCLUIDOS
+=============================================================================
+
+GRAFICA EN VIVO DE LA COLA CIRCULAR (esquina superior derecha)
+---------------------------------------------------------------
+Dibuja el contenido de la cola circular como una curva: cada muestra guardada
+es un punto, el eje horizontal es la posicion dentro de la ventana (de la mas
+antigua a la mas reciente) y el vertical es el valor de EAR. La linea roja
+punteada marca el umbral vigente.
+
+POR QUE VALE LA PENA EN LA PRESENTACION: hace VISIBLE la estructura de datos.
+La curva se desplaza hacia la izquierda conforme entran muestras nuevas por el
+final y salen las viejas por el frente. Cuando cierras los ojos, la curva cae
+por debajo de la linea roja y se ve como se va llenando la ventana. Es la
+diferencia entre decir "usamos una cola circular" y mostrarla funcionando.
+
+DETECCION DE ROSTRO PERDIDO
+---------------------------
+Si pasan mas de 3 segundos sin rostro detectado, se registra un evento de tipo
+"SIN ROSTRO" en la lista enlazada. Un conductor que desaparece del campo de
+vision tambien es una condicion que vale la pena documentar.
+
+
+CORRECCIONES MENORES
+--------------------
+  - Los objetos Mat del panel semitransparente se liberan explicitamente. Antes
+    se creaban dos objetos nativos en CADA cuadro (unos 1700 por minuto a 28
+    fps) que quedaban esperando al recolector de basura.
+  - Point2fVectorVector y el Mat auxiliar ahora se crean una sola vez fuera del
+    bucle, no en cada iteracion.
+  - Efecto espejo activado por defecto (tecla M para apagarlo): la imagen se
+    comporta como un espejo, que es como uno espera verse. No afecta ninguna
+    medicion porque el EAR promedia ambos ojos y el MAR es simetrico.
+  - Proteccion por si la camara entrega una resolucion muy baja: el panel y la
+    grafica se omiten en lugar de provocar un error.
+
+
+=============================================================================
+  CONTROLES COMPLETOS
+=============================================================================
+  W / S   sube / baja el umbral de EAR (ojo cerrado)
+  E / D   sube / baja el umbral de MAR (boca abierta)
+  R       restablece los umbrales por defecto
+  V       cambia el modo de vista de los rasgos
+  T       activa / desactiva la estabilizacion de los puntos
+  M       activa / desactiva el efecto espejo
+  ESC     salir y mostrar el reporte de sesion
+
+
+=============================================================================
+  COMO INTEGRARLO EN NETBEANS
+=============================================================================
+
+OPCION A - Reemplazar solo los dos archivos (recomendada)
+----------------------------------------------------------
+1. En el arbol de Projects, clic derecho sobre el paquete
+   com.mycompany.detectorsomnolencia  ->  New  ->  Java Class...
+2. Nombre: RasgosFaciales   (sin la extension .java)
+3. Borra todo el contenido del archivo que se creo y pega el contenido de
+   RasgosFaciales.java de este paquete.
+4. Abre DetectorSomnolencia.java, selecciona todo (Ctrl+A) y pega encima el
+   contenido del DetectorSomnolencia.java de este paquete.
+5. Clean and Build, luego Run.
+
+OPCION B - Abrir este proyecto completo
+----------------------------------------
+1. Descomprime la carpeta.
+2. COPIA a la raiz de la carpeta descomprimida los dos archivos del modelo,
+   que no vienen incluidos por su tamano:
+       haarcascade_frontalface_alt2.xml
+       lbfmodel.yaml
+3. File -> Open Project en NetBeans.
+
+IMPORTANTE: en cualquiera de las dos opciones, los archivos
+haarcascade_frontalface_alt2.xml y lbfmodel.yaml deben estar en la RAIZ del
+proyecto (al lado de pom.xml), igual que en la version anterior.
+
+
+=============================================================================
+  ANTES DE LA PRESENTACION
+=============================================================================
+1. Guarda una copia de tu proyecto actual que ya funciona, sin tocarla. Si algo
+   sale mal, presentas esa y listo.
+2. Prueba la version nueva con la camara ANTES del jueves. Verifica:
+   - Que aparezca la malla facial sobre tu cara.
+   - Que la tecla V cambie entre las tres vistas.
+   - Que la tecla T note la diferencia con y sin estabilizacion.
+   - Que al cerrar los ojos la curva de la grafica caiga y se dispare la alerta.
+   - Que al salir con ESC se imprima el reporte completo.
+3. Si algo no funciona, usas la version anterior y no pasa nada: el reporte
+   entregado describe esa version.
+
+COMO PRESENTARLO: estas mejoras son POSTERIORES a la entrega del reporte. Se
+mencionan como trabajo adicional, no como parte de lo documentado. Decir "el
+reporte describe la version que entregamos; despues seguimos trabajando en el
+identificador de rasgos y esto es lo que logramos" suma, no resta.

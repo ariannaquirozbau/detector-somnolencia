@@ -1,0 +1,153 @@
+=========================================================================
+  DETECTOR DE SOMNOLENCIA AL VOLANTE
+  Proyecto Final - Estructuras de Datos (Opcion B: Vision por Computadora)
+=========================================================================
+
+QUE HACE
+--------
+Monitorea el rostro del conductor con la camara web y dispara una alerta
+cuando detecta fatiga: ojos cerrados de forma sostenida o bostezos.
+Registra cada incidencia con su hora y genera un reporte al terminar.
+
+
+ARCHIVOS QUE FALTAN (IMPORTANTE)
+--------------------------------
+Este proyecto necesita DOS archivos de modelo que NO vienen incluidos por
+su tamano. Copialos desde el zip del "Equipo Antonio" o del
+"Equipo Emociones" que les paso el profesor:
+
+    haarcascade_frontalface_alt2.xml   (837 KB)
+    lbfmodel.yaml                      (56 MB)
+
+Van en la RAIZ del proyecto, es decir, al mismo nivel que el archivo
+pom.xml. NO dentro de src.
+
+Estructura final esperada:
+
+    DetectorSomnolencia/
+      |- pom.xml
+      |- haarcascade_frontalface_alt2.xml     <-- copiar aqui
+      |- lbfmodel.yaml                        <-- copiar aqui
+      |- LEEME.txt
+      \- src/main/java/com/mycompany/detectorsomnolencia/
+           |- DetectorSomnolencia.java   (programa principal)
+           |- ColaCircular.java          (estructura principal)
+           |- ListaEventos.java          (historial de la sesion)
+           |- Evento.java                (POJO de cada alerta)
+           |- Muestra.java               (POJO: EAR + marca de tiempo)
+           |- Alarma.java                (tono de alerta sonora)
+           \- PruebaEstructuras.java     (pruebas sin camara)
+
+
+COMO ABRIRLO
+------------
+NetBeans:  File > Open Project > seleccionar la carpeta DetectorSomnolencia
+VS Code:   File > Open Folder (requiere Extension Pack for Java)
+
+La primera vez, Maven descarga OpenCV (unos 300-400 MB). Tarda varios
+minutos y necesita internet. Solo pasa una vez.
+
+Si NetBeans marca "Some dependency artifacts are not in the local
+repository": clic derecho en el proyecto > Build with Dependencies.
+
+
+COMO EJECUTARLO
+---------------
+1) Pruebas de estructuras (NO necesita camara):
+   clic derecho sobre PruebaEstructuras.java > Run File
+
+2) Programa principal (necesita camara):
+   clic derecho sobre DetectorSomnolencia.java > Run File
+
+Usa siempre "Run File" (clic derecho sobre el archivo), NO el boton verde
+de la barra superior: hay dos clases con main y ese boton corre solo la
+que esta configurada en el pom.xml.
+
+
+TECLAS DENTRO DE LA VENTANA DE VIDEO
+------------------------------------
+    W / S   sube / baja el umbral de EAR (sensibilidad de ojos)
+    E / D   sube / baja el umbral de MAR (sensibilidad de boca)
+    R       restablece los valores por defecto
+    ESC     salir y mostrar el reporte de la sesion
+
+Los umbrales se ajustan EN VIVO, sin recompilar. La consola imprime el
+valor nuevo cada vez que lo cambias, y al salir muestra los umbrales
+finales que usaste (util para documentarlos en el reporte).
+
+
+COMO CALIBRARLO (hazlo una sola vez)
+------------------------------------
+PASO 1 - Calibrar los ojos:
+  a) Mira el valor de EAR con los ojos bien abiertos. Anotalo.
+  b) Cierra los ojos y mira el valor. Anotalo.
+  c) El umbral debe quedar JUSTO EN MEDIO de los dos.
+     Ejemplo: abierto 0.28, cerrado 0.14 -> umbral ideal 0.21
+  d) Ajustalo con W (sube) y S (baja) hasta que el letrero cambie de
+     "OJOS ABIERTOS" a "OJOS CERRADOS" exactamente cuando cierras.
+
+PASO 2 - Calibrar la boca:
+  a) Con la boca cerrada mira el MAR (deberia ser bajo, 0.0 a 0.1).
+  b) Abre la boca como bostezo y mira el MAR.
+  c) Ajusta con E (sube) y D (baja) hasta que el letrero diga
+     "BOCA ABIERTA" solo cuando de verdad la abres.
+  d) Manten la boca abierta 1 segundo: suena el tono y sube el
+     contador de bostezos.
+
+PASO 3 - Probar la alarma:
+  Cierra los ojos 2 segundos. La barra de PERCLOS se llena, el marco se
+  pone rojo, suena el tono y se guarda una captura Evidencia_*.jpg en la
+  carpeta del proyecto.
+
+PASO 4 - Probar que el parpadeo NO alerta:
+  Parpadea normal varias veces. La barra sube poquito y baja. No debe
+  sonar la alarma. Esta es la prueba clave del proyecto.
+
+
+SI ALGO NO FUNCIONA
+-------------------
+"No se detecto ninguna camara web"
+   -> Cambia el 0 por 1 o 2 en: new VideoCapture(0)
+   -> Cierra Teams, Zoom o cualquier app que tenga tomada la camara.
+
+"No se encontro haarcascade_frontalface_alt2.xml"
+   -> Los modelos no estan en la raiz. Ver la seccion de arriba.
+
+Nunca dice "OJOS CERRADOS" aunque los cierre
+   -> Sube el umbral con W hasta que si lo detecte.
+      (Con lentes, poca luz o camara de baja resolucion el EAR se mide
+      mas alto de lo normal.)
+
+Dice "OJOS CERRADOS" aunque los tenga abiertos
+   -> Baja el umbral con S.
+
+Nunca detecta el bostezo
+   -> Baja el umbral de boca con D. Si con el MAR visible en pantalla
+      ves que abriendo la boca apenas sube, acerca mas la cara a la
+      camara: los puntos internos de los labios (60-67) pierden
+      precision cuando el rostro se ve pequeno.
+
+No suena nada
+   -> Revisa el volumen de Windows. El sistema genera un tono propio,
+      no depende de los sonidos del sistema, pero si necesita volumen.
+
+Va muy lento (FPS menor a 5)
+   -> Cierra otros programas. El modelo LBF consume CPU.
+   -> El sistema ya se adapta solo: la ventana es por TIEMPO, no por
+      numero de cuadros, asi que funciona igual a 5 o a 30 fps.
+
+Error de compilacion por la version de Java
+   -> En pom.xml cambia <maven.compiler.release>17</maven.compiler.release>
+      por la version de JDK que tengas instalada.
+
+
+PARAMETROS EN EL CODIGO
+-----------------------
+Estan como constantes al inicio de DetectorSomnolencia.java:
+
+  EAR_POR_DEFECTO   0.23    Umbral inicial de ojo cerrado
+  MAR_POR_DEFECTO   0.35    Umbral inicial de boca abierta
+  VENTANA_MS        1500    Duracion de la ventana deslizante (ms)
+  UMBRAL_PERCLOS    0.80    % de la ventana con ojo cerrado para alertar
+  MS_BOSTEZO        700     Tiempo con boca abierta para contar un bostezo
+  ENFRIAMIENTO_MS   5000    Tiempo minimo entre capturas de evidencia

@@ -1,0 +1,1 @@
+target/ *.class nbproject/private/ nbactions.xml haarcascade_frontalface_alt2.xml lbfmodel.yaml
